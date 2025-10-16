@@ -18,7 +18,7 @@ from backend.utils.color import dominant_color
 from backend.utils.actions import classify_action
 from backend.services.qr_service import decode_qr_text
 
-
+# Função auxiliar para verificar se um bbox está dentro da ROI
 def inside_roi(bbox: Tuple[int, int, int, int], width: int, height: int) -> bool:
     x1, y1, x2, y2 = bbox
     rx1, ry1, rx2, ry2 = settings.roi_rect
@@ -28,7 +28,7 @@ def inside_roi(bbox: Tuple[int, int, int, int], width: int, height: int) -> bool
     return rX1 <= cx <= rX2 and rY1 <= cy <= rY2
 
 
-# class DetectionService (init + uso de classes na inferência + filtro extra)
+# Serviço de detecção de pessoas
 class DetectionService:
     def __init__(self):
         self.model = YOLO(settings.yolo_model)
@@ -40,7 +40,7 @@ class DetectionService:
         self.current_detections: List[DetectionItem] = []
         self.track_inside_roi: Dict[int, bool] = {}
         self.stopped_by_qr = False
-        # Class names for detected objects (COCO)
+        # Mapear ids->nomes de classes para detecção (COCO)
         try:
             self.class_names = self.model.names
         except Exception:
@@ -56,13 +56,14 @@ class DetectionService:
         self.allowed_classes_for_predict = sorted({0, *self.allowed_object_class_ids})
         self.prev_speeds: Dict[int, List[float]] = {}
         self.last_seen_times: Dict[int, float] = {}
-        self.exit_timeout: float = 1.0  # seconds without detection to mark exit
+        self.exit_timeout: float = 1.0  # segundos sem detecção para marcar saída
         # Ajustes de performance
         self.imgsz: int = int(os.environ.get("IMG_SIZE", "512"))
         self.frame_skip: int = int(os.environ.get("FRAME_SKIP", "1"))
         self._frame_count: int = 0
 
     def _iou(self, a: Tuple[int, int, int, int], b: Tuple[int, int, int, int]) -> float:
+        #Calcula Intersection over Union (IoU) entre dois bboxes.
         ax1, ay1, ax2, ay2 = a
         bx1, by1, bx2, by2 = b
         inter_x1 = max(ax1, bx1)
@@ -78,12 +79,11 @@ class DetectionService:
         return float(inter / union) if union > 0 else 0.0
 
     def _is_in_hand(self, person_bbox: Tuple[int, int, int, int], obj_bbox: Tuple[int, int, int, int]) -> bool:
-        """Heurística para estimar se um objeto está na mão da pessoa.
-        Critérios:
-        - Centro do objeto dentro de faixas laterais (mão esquerda/direita) da bbox da pessoa.
-        - Altura do centro do objeto entre 35% e 85% da altura da pessoa.
-        - Objeto relativamente pequeno (área <= 25% da área da pessoa).
-        """
+        #Heurística para estimar se um objeto está na mão da pessoa.
+        # Critérios:
+        # - Centro do objeto dentro de faixas laterais (mão esquerda/direita) da bbox da pessoa.
+        # - Altura do centro do objeto entre 35% e 85% da altura da pessoa.
+        # - Objeto relativamente pequeno (área <= 25% da área da pessoa).
         x1, y1, x2, y2 = person_bbox
         ox1, oy1, ox2, oy2 = obj_bbox
         w = max(0, x2 - x1)
@@ -196,7 +196,6 @@ class DetectionService:
 
     def _loop(self):
         db = SessionLocal()
-        fps_time = time.time()
         prev_centers: Dict[int, Tuple[float, float]] = {}
         prev_timestamps: Dict[int, float] = {}
         while self.running and self.cap is not None:
@@ -253,7 +252,7 @@ class DetectionService:
             now = time.time()
 
             present_ids: Set[int] = set()
-            for i in keep_idx:  # iterate deduplicated detections
+            for i in keep_idx:  # i é o índice na detecção deduplicada
                 bbox = tracked.xyxy[i].astype(int)
                 x1, y1, x2, y2 = bbox
                 track_id = int(tracked.tracker_id[i]) if tracked.tracker_id is not None else -1
@@ -262,7 +261,7 @@ class DetectionService:
                 if valid_id:
                     present_ids.add(track_id)
 
-                #Color extraction com recorte central para evitar fundo
+                # extração de cor com recorte central para evitar fundo
                 w = max(0, x2 - x1)
                 h = max(0, y2 - y1)
                 if w <= 0 or h <= 0:
@@ -288,7 +287,7 @@ class DetectionService:
                         top_color = dominant_color(central[: ch // 2])
                         bottom_color = dominant_color(central[ch // 2 :])
 
-                # Action estimate with smoothing
+                # estimativa de ação com suavização
                 center = ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
                 dt = now - prev_timestamps.get(track_id, now)
                 if valid_id and track_id in prev_centers and dt > 0:

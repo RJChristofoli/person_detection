@@ -9,8 +9,8 @@ from backend.routers.detections import router as detections_router
 from backend.routers.events import router as events_router
 from backend.routers.chat import router as chat_router
 from backend.routers.config_router import router as config_router
-from backend.routers.qr import router as qr_router
 from backend.routers.people import router as people_router
+from backend.routers.stats import router as stats_router
 
 
 def create_app() -> FastAPI:
@@ -31,7 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix="/api")
     app.include_router(config_router, prefix="/api")
     app.include_router(people_router, prefix="/api")
-    app.include_router(qr_router, prefix="/api")
+    app.include_router(stats_router, prefix="/api")
 
     @app.get("/health")
     def health():

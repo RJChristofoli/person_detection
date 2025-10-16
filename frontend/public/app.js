@@ -1,30 +1,24 @@
-// Global state
-let socket = null;
+// estado global
 let isConnected = false;
 let startTime = null;
-let peopleCount = 0;
 let currentFilters = {};
 let timeInterval = null;
-let qrStopNotified = false;
+let qrStopNotified = false
 
-// DOM elements
+// elementos DOM
 const videoFeed = document.getElementById('video-feed');
-// Start/Stop buttons were removed from UI; keep null references to avoid errors
-const startBtn = document.getElementById('start-btn');
-const stopBtn = document.getElementById('stop-btn');
-const peopleCountEl = document.getElementById('people-count');
 const timeTrackingEl = document.getElementById('time-tracking');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const chatMessages = document.getElementById('chat-messages');
 
-// Dashboard overview cards
+// elementos DOM para dashboard
 const totalTrackedEl = document.getElementById('total-tracked');
 const activeInFrameEl = document.getElementById('active-in-frame');
 const holdingObjectsCountEl = document.getElementById('holding-objects-count');
 const avgTimeSpentEl = document.getElementById('avg-time-spent');
 
-// Filters UI
+// elementos DOM para filtros
 const filterColorEl = document.getElementById('filter-color');
 const filterActionEl = document.getElementById('filter-action');
 const filterHoldingEl = document.getElementById('filter-holding');
@@ -34,11 +28,7 @@ const applyFiltersBtn = document.getElementById('apply-filters-btn');
 const clearFiltersBtn = document.getElementById('clear-filters-btn');
 const personsTbody = document.getElementById('persons-tbody');
 
-// Chart.js instances
-let actionsChartInstance = null;
-let colorsChartInstance = null;
-let objectsChartInstance = null;
-let detectionsTimeChartInstance = null;
+// Chart.js removido: gráficos atualizados via eventos customizados
 
 // Backend API URL (usa 127.0.0.1 para evitar problemas com IPv6/localhost)
 const API_PORT = 8001;
@@ -49,17 +39,15 @@ const BACKEND_HOST = (typeof window !== 'undefined' && window.location &&
 // Base para os endpoints FastAPI com prefixo /api
 const API_URL = `http://${BACKEND_HOST}:${API_PORT}/api`;
 
-// Initialize the application
+// inicializa a aplicação
 function init() {
-    // Detection controls & chat
-    if (startBtn) startBtn.addEventListener('click', startDetection);
-    if (stopBtn) stopBtn.addEventListener('click', stopDetection);
+    // Controles de detecção e chat
     sendBtn.addEventListener('click', sendChatMessage);
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendChatMessage();
     });
 
-    // Filters
+    // Controles de filtros
     if (applyFiltersBtn && clearFiltersBtn) {
         applyFiltersBtn.addEventListener('click', () => {
             currentFilters = getFiltersFromUI();
@@ -76,68 +64,34 @@ function init() {
         });
     }
 
-    // Placeholder for video until camera starts
+    // placeholder para video até que a câmera comece
     videoFeed.src = createPlaceholder();
 
-    // Initialize charts and first data load
-    initCharts();
+    // Inicializa gráficos e carrega dados iniciais
     refreshDashboard({});
-    // Periodic refresh of dashboard data
+    // Atualiza dashboard a cada 8 segundos
     setInterval(() => refreshDashboard(currentFilters), 8000);
-    // Poll backend detection status to react to QR stop
+    // Poll backend para verificar status de detecção a cada 2 segundos
     setInterval(() => pollDetectionStatus(), 2000);
 
-    // Auto-start detection when the system (page) loads
+    // Auto-inicia detecção quando o sistema (página) carregar
     startDetection();
 }
 
-// Start the detection process
+// Inicia o processo de detecção
 async function startDetection() {
     if (isConnected) return;
     try {
-        // Aciona o backend para iniciar a câmera
         await fetch(`${API_URL}/detections/start`, { method: 'POST' });
         isConnected = true;
-        if (startBtn) startBtn.disabled = true;
-        if (stopBtn) stopBtn.disabled = false;
         startTime = new Date();
         updateTimeTracking();
-        // Usa stream MJPEG do backend
         videoFeed.src = `${API_URL}/detections/stream`;
-        // Inicia atualização do tempo
         timeInterval = setInterval(updateTimeTracking, 1000);
     } catch (error) {
         console.error('Erro ao iniciar detecção:', error);
         addChatMessage('Assistente Virtual', `Erro ao iniciar detecção em ${API_URL}/detections/start`);
     }
-}
-
-// Stop the detection process
-async function stopDetection() {
-    if (!isConnected) return;
-    try {
-        await fetch(`${API_URL}/detections/stop`, { method: 'POST' });
-    } catch (e) {
-        // ignore
-    }
-    isConnected = false;
-    if (startBtn) startBtn.disabled = false;
-    if (stopBtn) stopBtn.disabled = true;
-    clearInterval(timeInterval);
-    videoFeed.src = createPlaceholder();
-}
-
-function handleQRStopUI() {
-    // Stop timers and replace video with placeholder
-    clearInterval(timeInterval);
-    isConnected = false;
-    if (startBtn) startBtn.disabled = false;
-    if (stopBtn) stopBtn.disabled = true;
-    videoFeed.src = createPlaceholder();
-    // Show message in chat/UI
-    try {
-        addChatMessage('Assistente Virtual', 'Camera desligada por QRCODE');
-    } catch (_) { /* noop */ }
 }
 
 async function pollDetectionStatus() {
@@ -149,20 +103,16 @@ async function pollDetectionStatus() {
             qrStopNotified = true;
             handleQRStopUI();
         }
-        // If system stopped for any reason, ensure UI shows placeholder
         if (st && st.running === false && isConnected) {
             isConnected = false;
             clearInterval(timeInterval);
-            if (startBtn) startBtn.disabled = false;
-            if (stopBtn) stopBtn.disabled = true;
             videoFeed.src = createPlaceholder();
         }
-    } catch (e) {
-        // ignore polling errors
-    }
+    } catch (e) { /* noop */ }
+    // Ignora erros de polling
 }
 
-// Update the time tracking display
+// Atualiza o display de tracking de tempo
 function updateTimeTracking() {
     if (!startTime) return;
     
@@ -174,64 +124,12 @@ function updateTimeTracking() {
     timeTrackingEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Update dashboard charts
+// Atualiza gráficos do dashboard
 // ---- Dashboard data & charts ----
 
-function initCharts() {
-    const commonOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false, labels: { color: '#d1d5db' } }, tooltip: { enabled: true } },
-        scales: {
-            x: { ticks: { color: '#d1d5db' }, grid: { color: '#4b5563' } },
-            y: { ticks: { color: '#d1d5db' }, grid: { color: '#4b5563' }, beginAtZero: true }
-        }
-    };
 
-    // Actions (bar)
-    const actionsCtx = document.getElementById('actionsChart')?.getContext('2d');
-    if (actionsCtx) {
-        actionsChartInstance = new Chart(actionsCtx, {
-            type: 'bar',
-            data: { labels: ['Walking', 'Standing'], datasets: [{ label: 'People', backgroundColor: ['#3b82f6', '#10b981'], data: [0, 0] }] },
-            options: { ...commonOptions, indexAxis: 'y' }
-        });
-    }
 
-    // Colors (bar)
-    const colorsCtx = document.getElementById('colorsChart')?.getContext('2d');
-    if (colorsCtx) {
-        colorsChartInstance = new Chart(colorsCtx, {
-            type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Count', backgroundColor: '#f59e0b', data: [] }] },
-            options: { ...commonOptions, indexAxis: 'y' }
-        });
-    }
-
-    // Objects (bar)
-    const objectsCtx = document.getElementById('objectsChart')?.getContext('2d');
-    if (objectsCtx) {
-        objectsChartInstance = new Chart(objectsCtx, {
-            type: 'bar',
-            data: { labels: ['Holding', 'Not Holding'], datasets: [{ label: 'People', backgroundColor: ['#8b5cf6', '#6b7280'], data: [0, 0] }] },
-            options: { ...commonOptions, indexAxis: 'y' }
-        });
-    }
-
-    // Detections over time: usar Shadcn quando não for <canvas>
-    const timeEl = document.getElementById('detectionsTimeChart');
-    const isCanvas = timeEl && timeEl.tagName && timeEl.tagName.toLowerCase() === 'canvas';
-    if (isCanvas) {
-        const timeCtx = timeEl.getContext('2d');
-        if (timeCtx) {
-            detectionsTimeChartInstance = new Chart(timeCtx, {
-                type: 'line',
-                data: { labels: [], datasets: [{ label: 'Detections', borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.2)', tension: 0.3, data: [] }] },
-                options: { ...commonOptions, scales: { x: { ticks: { color: '#374151' } }, y: { ticks: { color: '#374151' }, beginAtZero: true, suggestedMax: 10 } } }
-            });
-        }
-    }
-}
+    // Gráficos inicializados via componentes do frontend (Shadcn); sem Chart.js aqui
 
 function getFiltersFromUI() {
     const filters = {};
@@ -263,129 +161,73 @@ async function fetchPersons(filters = {}) {
     }
 }
 
-function computeAggregates(persons) {
-    const total = persons.length;
-    const colorsCount = {};
-    const actionsCount = { walking: 0, standing: 0 };
-    let holdingCount = 0;
-    let activeInFrame = 0;
-    let totalSeconds = 0;
-    let finishedSessions = 0;
-
-    persons.forEach(p => {
-        // Colors: usar top_color e bottom_color do backend
-        [p.top_color, p.bottom_color].forEach(c => {
-            if (c) colorsCount[c] = (colorsCount[c] || 0) + 1;
-        });
-        // Action: mapear 'stopped' para 'standing'
-        if (p.last_action === 'walking') actionsCount.walking++;
-        else if (p.last_action === 'stopped') actionsCount.standing++;
-
-        // Holding object
-        if (p.holding_object === true) holdingCount++;
-
-        // Active in frame: sem last_seen (ainda não saiu), considerar ativo
-        if (!p.last_seen) {
-            activeInFrame++;
-        }
-
-        // Time spent: aproximar usando first_seen e last_seen
-        if (p.first_seen && p.last_seen) {
-            const start = new Date(p.first_seen).getTime();
-            const end = new Date(p.last_seen).getTime();
-            if (!Number.isNaN(start) && !Number.isNaN(end) && end >= start) {
-                totalSeconds += Math.round((end - start) / 1000);
-                finishedSessions++;
-            }
-        }
-    });
-
-    const avgTime = finishedSessions > 0 ? Math.round(totalSeconds / finishedSessions) : 0;
-    return { total, colorsCount, actionsCount, holdingCount, activeInFrame, avgTime };
-}
-
-function buildTimeSeries(persons) {
-    const buckets = new Map();
-    persons.forEach(p => {
-        if (!p.first_seen) return;
-        const d = new Date(p.first_seen);
-        const label = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-        buckets.set(label, (buckets.get(label) || 0) + 1);
-    });
-    const labels = Array.from(buckets.keys()).sort();
-    const data = labels.map(l => buckets.get(l));
-    return { labels, data };
-}
-
-function updateOverviewCards(agg) {
-    if (totalTrackedEl) totalTrackedEl.textContent = agg.total;
-    if (activeInFrameEl) activeInFrameEl.textContent = agg.activeInFrame;
-    if (holdingObjectsCountEl) holdingObjectsCountEl.textContent = agg.holdingCount;
-    if (avgTimeSpentEl) avgTimeSpentEl.textContent = agg.avgTime;
-}
-
-function updateCharts(agg, timeSeries) {
-    // Actions
-    if (actionsChartInstance) {
-        actionsChartInstance.data.datasets[0].data = [agg.actionsCount.walking, agg.actionsCount.standing];
-        actionsChartInstance.update();
-    } else {
-        // Dispatch event for Shadcn/Recharts Bar Mixed (Ações)
-        window.dispatchEvent(new CustomEvent('actionsBarUpdate', {
-            detail: { walking: agg.actionsCount.walking, standing: agg.actionsCount.standing }
-        }));
-    }
-
-    // Colors
-    if (colorsChartInstance) {
-        const colorLabels = Object.keys(agg.colorsCount);
-        const colorData = colorLabels.map(k => agg.colorsCount[k]);
-        colorsChartInstance.data.labels = colorLabels;
-        colorsChartInstance.data.datasets[0].data = colorData;
-        if (colorLabels.length > 1) {
-            colorsChartInstance.data.datasets[0].backgroundColor = colorLabels.map((_, i) => {
-                const hues = [30, 200, 120, 0, 260, 320, 160];
-                const h = hues[i % hues.length];
-                return `hsl(${h}, 70%, 55%)`;
-            });
-        } else {
-            colorsChartInstance.data.datasets[0].backgroundColor = '#f59e0b';
-        }
-        colorsChartInstance.update();
-    }
-
-    // Objects
-    if (objectsChartInstance) {
-        const notHolding = Math.max(agg.total - agg.holdingCount, 0);
-        objectsChartInstance.data.datasets[0].data = [agg.holdingCount, notHolding];
-        objectsChartInstance.update();
-    } else {
-        const notHolding = Math.max(agg.total - agg.holdingCount, 0);
-        window.dispatchEvent(new CustomEvent('objectsBarUpdate', {
-            detail: { holding: agg.holdingCount, notHolding }
-        }));
-    }
-
-    // Time series
-    if (detectionsTimeChartInstance) {
-        detectionsTimeChartInstance.data.labels = timeSeries.labels;
-        detectionsTimeChartInstance.data.datasets[0].data = timeSeries.data;
-        detectionsTimeChartInstance.update();
-    } else {
-        // Not Chart.js — dispatch event for Shadcn/Recharts component
-        window.dispatchEvent(new CustomEvent('detectionsTimeUpdate', { detail: timeSeries }));
-    }
-}
-
-async function refreshDashboard(filters = {}) {
-    const persons = await fetchPersons(filters);
+// consumir /api/stats
+async function fetchStats(filters = {}) {
     try {
+        const qs = buildQueryString(filters);
+        const url = `${API_URL}/stats/${qs ? `?${qs}` : ''}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+    } catch (e) {
+        console.error('Error fetching stats:', e);
+        // Fallback seguro
+        return {
+            total: 0,
+            activeInFrame: 0,
+            holdingCount: 0,
+            avgTime: 0,
+            actionsCount: { walking: 0, standing: 0 },
+            colorsCount: {},
+            timeSeries: { labels: [], data: [] }
+        };
+    }
+}
+
+
+
+// Alterado: agora recebe stats direto do backend
+function updateOverviewCards(stats) {
+    if (totalTrackedEl) totalTrackedEl.textContent = stats.total;
+    if (activeInFrameEl) activeInFrameEl.textContent = stats.activeInFrame;
+    if (holdingObjectsCountEl) holdingObjectsCountEl.textContent = stats.holdingCount;
+    if (avgTimeSpentEl) avgTimeSpentEl.textContent = stats.avgTime;
+}
+
+// Alterado: agora usa stats diretamente
+function updateCharts(stats) {
+    // Ações
+    window.dispatchEvent(new CustomEvent('actionsBarUpdate', {
+        detail: {
+            walking: stats.actionsCount.walking,
+            standing: stats.actionsCount.standing
+        }
+    }));
+
+    // Objetos
+    const notHolding = Math.max(stats.total - stats.holdingCount, 0);
+    window.dispatchEvent(new CustomEvent('objectsBarUpdate', {
+        detail: { holding: stats.holdingCount, notHolding }
+    }));
+
+    // Série temporal
+    window.dispatchEvent(new CustomEvent('detectionsTimeUpdate', { detail: stats.timeSeries }));
+}
+
+// Alterado: refresh agora usa /api/stats para métricas e gráficos
+async function refreshDashboard(filters = {}) {
+    const [stats, persons] = await Promise.all([
+        fetchStats(filters),
+        fetchPersons(filters)
+    ]);
+
+    try {
+        console.debug('[dashboard] stats fetched:', stats?.total ?? 'n/a');
         console.debug('[dashboard] persons fetched:', Array.isArray(persons) ? persons.length : typeof persons);
     } catch (_) { /* noop */ }
-    const agg = computeAggregates(persons);
-    const timeSeries = buildTimeSeries(persons);
-    updateOverviewCards(agg);
-    updateCharts(agg, timeSeries);
+
+    updateOverviewCards(stats);
+    updateCharts(stats);
     renderPersonsTable(persons);
 }
 
@@ -419,18 +261,18 @@ function renderPersonsTable(persons) {
     });
 }
 
-// Send a chat message to the AI assistant
+// Envia uma mensagem de chat para o assistente virtual
 function sendChatMessage() {
     const message = chatInput.value.trim();
     if (!message) return;
     
-    // Add user message to chat
+    // Adiciona mensagem do usuário ao chat
     addChatMessage('You', message, 'user');
     
-    // Clear input
+    // Limpa o campo de entrada
     chatInput.value = '';
     
-    // Send message to backend
+    // Envia mensagem para o backend
     fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: {
@@ -440,7 +282,7 @@ function sendChatMessage() {
     })
     .then(response => response.json())
     .then(data => {
-        // Add AI response to chat
+        // Adiciona resposta do assistente virtual ao chat  
         addChatMessage('AI Assistant', data.answer || data.response || 'Sem resposta');
     })
     .catch(error => {
@@ -449,7 +291,7 @@ function sendChatMessage() {
     });
 }
 
-// Add a message to the chat display
+    // Adiciona mensagem ao display de chat
 function addChatMessage(sender, message, type = 'ai') {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'mb-3';
@@ -467,22 +309,22 @@ function addChatMessage(sender, message, type = 'ai') {
     
     chatMessages.appendChild(messageDiv);
     
-    // Scroll to bottom
+    // Rola para o final do chat para mostrar a nova mensagem
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Create a placeholder image for the video feed
+// Cria uma imagem de placeholder para o feed de vídeo
 function createPlaceholder() {
     const canvas = document.createElement('canvas');
     canvas.width = 640;
     canvas.height = 480;
     const ctx = canvas.getContext('2d');
     
-    // Fill background
+    // Preenche fundo
     ctx.fillStyle = '#f0f0f0';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Add text
+    // Adiciona texto
     ctx.fillStyle = '#666';
     ctx.font = '24px Arial';
     ctx.textAlign = 'center';
@@ -492,9 +334,9 @@ function createPlaceholder() {
     return canvas.toDataURL();
 }
 
-// Initialize the application when the DOM is ready.
-// In Next.js, this script can be loaded after DOMContentLoaded has already fired,
-// so we call init() immediately if the document is not loading.
+// Inicializa a aplicação quando o DOM estiver pronto.
+// No Next.js, este script pode ser carregado depois que o DOMContentLoaded já tenha disparado,
+// então chamamos init() imediatamente se o documento não estiver carregando.
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
