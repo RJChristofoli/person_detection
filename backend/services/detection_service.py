@@ -332,10 +332,10 @@ class DetectionService:
 
                 # DB upsert person
                 if valid_id:
-                    person = db.query(Person).filter(Person.track_id == track_id).first()
+                    person = db.query(Person).filter(Person.track_id == (track_id + os.getpid() * 100000)).first()
                     if person is None:
                         person = Person(
-                            track_id=track_id,
+                            track_id=(track_id + os.getpid() * 100000),
                             top_color=top_color,
                             bottom_color=bottom_color,
                             last_action=action,
@@ -394,7 +394,7 @@ class DetectionService:
             now_ts = time.time()
             for tid, last_ts in list(self.last_seen_times.items()):
                 if tid not in present_ids and (now_ts - last_ts) > self.exit_timeout:
-                    person = db.query(Person).filter(Person.track_id == tid).first()
+                    person = db.query(Person).filter(Person.track_id == (tid + os.getpid() * 100000)).first()
                     if person and person.last_seen is None:
                         person.last_seen = datetime.datetime.fromtimestamp(last_ts)
                         db.commit()
