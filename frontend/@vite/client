@@ -1,0 +1,3 @@
+// Stub file to satisfy /@vite/client requests in this static server.
+// This resource is not used by the app; it prevents 404 log noise.
+export const noop = () => {};

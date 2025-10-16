@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+python-dotenv
+ultralytics
+opencv-python
+numpy
+supervision
+Pillow
+python-multipart
+openai

@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# DBs e env (não subir credenciais)
+backend/data.db
+backend/data_reset.db
+backend/.env
+
+# Node/Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.env
+
+# Virtual env
+.venv/
+
+# Logs e temporários
+*.log
+
+# Pesos do YOLO (use Git LFS se precisar versionar)
+yolov8*.pt
